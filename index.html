@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Password Generator</title>
+
+<style>
+:root{
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --primary:#6366f1;
+}
+body.dark{
+  --bg:#0f172a;
+  --card:#1e293b;
+  --text:#f1f5f9;
+}
+body{
+  margin:0;
+  font-family:system-ui;
+  background:var(--bg);
+  color:var(--text);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+}
+.card{
+  width:360px;
+  background:var(--card);
+  padding:20px;
+  border-radius:20px;
+  box-shadow:0 10px 30px rgba(0,0,0,.15);
+}
+.password-box{
+  display:flex;
+  gap:10px;
+}
+.password-box input{
+  flex:1;
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #ccc;
+  font-size:18px;
+  background:transparent;
+  color:var(--text);
+}
+button{
+  border:none;
+  border-radius:10px;
+  padding:12px;
+  cursor:pointer;
+  font-weight:600;
+}
+.copy{background:var(--primary);color:white;}
+.generate{width:100%;margin-top:12px;background:var(--primary);color:white;}
+.top-buttons{display:flex;gap:10px;margin-top:10px;}
+.top-buttons button{flex:1;background:#94a3b8;color:white;}
+.strength{height:10px;border-radius:10px;margin:10px 0 5px;background:red;transition:.3s;width:10%;}
+.entropy{font-size:12px;margin-bottom:10px;}
+.controls label{display:block;margin:4px 0;font-size:14px;}
+.history{margin-top:15px;border:1px solid #ccc;border-radius:10px;padding:10px;height:150px;overflow-y:auto;}
+.history-item{font-family:monospace;padding:4px 0;border-bottom:1px solid #ddd;cursor:pointer;}
+.clear{margin-top:8px;width:100%;background:#ef4444;color:white;}
+.toast{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#22c55e;
+  color:white;
+  padding:10px 20px;
+  border-radius:10px;
+  opacity:0;
+  transition:.3s;
+}
+.toast.show{opacity:1;}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>🔐 Password Generator</h2>
+
+<div class="password-box">
+  <input type="text" id="password" readonly>
+  <button class="copy" onclick="copyPassword()">Copy</button>
+</div>
+
+<div class="strength" id="strengthBar"></div>
+<div class="entropy" id="entropyText">Entropy: 0 bits</div>
+
+<label>Length: <span id="lenVal">6</span></label>
+<input type="range" min="4" max="12" value="6" id="length">
+
+<div class="controls">
+  <label><input type="checkbox" id="upper" checked> Capital Letters</label>
+  <label><input type="checkbox" id="lower" checked> Small Letters</label>
+  <label><input type="checkbox" id="numbers" checked> Numbers</label>
+  <label><input type="checkbox" id="symbols" checked> Symbols</label>
+  <label><input type="checkbox" id="numOnly"> Numbers Only</label>
+  <label><input type="checkbox" id="exclude"> Exclude O,0,l,1</label>
+</div>
+
+<button class="generate" onclick="generatePassword()">Generate Password</button>
+
+<div class="top-buttons">
+  <button onclick="toggleDark()">🌙 Dark</button>
+</div>
+
+<div class="history" id="historyBox"></div>
+<button class="clear" onclick="clearHistory()">🗑 Clear History</button>
+
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+const lengthSlider=document.getElementById("length");
+const lenVal=document.getElementById("lenVal");
+const passwordField=document.getElementById("password");
+const historyBox=document.getElementById("historyBox");
+const entropyText=document.getElementById("entropyText");
+const strengthBar=document.getElementById("strengthBar");
+const toast=document.getElementById("toast");
+
+let history=[];
+
+/* slider value only display */
+lengthSlider.oninput=()=>lenVal.textContent=lengthSlider.value;
+
+document.getElementById("numOnly").addEventListener("change",()=>{
+  let disabled=document.getElementById("numOnly").checked;
+  document.getElementById("upper").disabled=disabled;
+  document.getElementById("lower").disabled=disabled;
+  document.getElementById("symbols").disabled=disabled;
+});
+
+function getCharset(){
+  const upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const lower="abcdefghijklmnopqrstuvwxyz";
+  const numbers="0123456789";
+  const symbols="!@#$%^&*()_+{}[]<>?";
+  const exclude="O0l1";
+
+  let charset="";
+
+  if(document.getElementById("numOnly").checked){
+    charset=numbers;
+  }else{
+    if(document.getElementById("upper").checked) charset+=upper;
+    if(document.getElementById("lower").checked) charset+=lower;
+    if(document.getElementById("numbers").checked) charset+=numbers;
+    if(document.getElementById("symbols").checked) charset+=symbols;
+  }
+
+  if(document.getElementById("exclude").checked){
+    charset=[...charset].filter(c=>!exclude.includes(c)).join("");
+  }
+
+  return charset;
+}
+
+function generatePassword(){
+  const length=parseInt(lengthSlider.value);
+  const charset=getCharset();
+  if(!charset) return;
+
+  let pass="";
+  for(let i=0;i<length;i++){
+    pass+=charset[Math.floor(Math.random()*charset.length)];
+  }
+
+  passwordField.value=pass;
+
+  const entropy=calculateEntropy(length, charset.length);
+  updateStrength(entropy);
+  saveHistory(pass);
+}
+
+function calculateEntropy(length, charsetSize){
+  return length * Math.log2(charsetSize);
+}
+
+function updateStrength(entropy){
+  entropyText.textContent="Entropy: "+entropy.toFixed(1)+" bits";
+
+  if(entropy<28){
+    strengthBar.style.background="red";
+    strengthBar.style.width="33%";
+  }
+  else if(entropy<36){
+    strengthBar.style.background="orange";
+    strengthBar.style.width="66%";
+  }
+  else{
+    strengthBar.style.background="green";
+    strengthBar.style.width="100%";
+  }
+}
+
+function copyPassword(){
+  const text=passwordField.value;
+
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(showToast);
+  }else{
+    passwordField.select();
+    document.execCommand("copy");
+    showToast();
+  }
+}
+
+function showToast(){
+  toast.classList.add("show");
+  setTimeout(()=>toast.classList.remove("show"),1500);
+}
+
+function saveHistory(pass){
+  history.unshift(pass);
+  if(history.length>10) history.pop();
+  renderHistory();
+}
+
+function renderHistory(){
+  historyBox.innerHTML="";
+  history.forEach(p=>{
+    const div=document.createElement("div");
+    div.className="history-item";
+    div.textContent=p;
+    div.onclick=()=>passwordField.value=p;
+    historyBox.appendChild(div);
+  });
+}
+
+function clearHistory(){
+  history=[];
+  renderHistory();
+}
+
+function toggleDark(){
+  document.body.classList.toggle("dark");
+}
+
+/* first load */
+generatePassword();
+</script>
+
+</body>
+</html>
